@@ -3,39 +3,76 @@ import nodemailer from 'nodemailer'
 
 const APP_URL = (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '')
 
+// ---------------------------------------------------------------------------
+// Email is sent with one of two providers, tried in this order:
+//   1. RESEND (HTTP API) — works reliably on Vercel / serverless. Set
+//      RESEND_API_KEY (and optionally EMAIL_FROM). This is the recommended
+//      provider for production because outbound SMTP is often blocked/flaky on
+//      serverless platforms.
+//   2. GMAIL (SMTP) — fine for local development; unreliable on Vercel because
+//      Gmail commonly blocks SMTP logins from datacenter IPs.
+// If neither is configured the message is logged so dev flows still work.
+// ---------------------------------------------------------------------------
+
+const EMAIL_FROM = process.env.EMAIL_FROM || 'SportsPulse <onboarding@resend.dev>'
+
+/** Send via Resend's HTTP API. Returns true on success. */
+async function sendViaResend(to: string, subject: string, html: string): Promise<boolean> {
+  const key = process.env.RESEND_API_KEY
+  if (!key) return false
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
+    })
+    if (!res.ok) {
+      console.error('[email] Resend failed:', res.status, await res.text().catch(() => ''))
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error('[email] Resend error:', err)
+    return false
+  }
+}
+
 let transporter: nodemailer.Transporter | null = null
 
 function getTransporter(): nodemailer.Transporter | null {
   if (transporter) return transporter
   const user = process.env.GMAIL_USER
   const pass = process.env.GMAIL_APP_PASSWORD
-  if (!user || !pass) {
-    console.warn('[email] GMAIL_USER / GMAIL_APP_PASSWORD not set — emails will be logged, not sent.')
-    return null
-  }
+  if (!user || !pass) return null
+  // Explicit host/port (more reliable than service:'gmail') with short timeouts
+  // so a blocked connection fails fast instead of hanging the serverless call.
   transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: { user, pass },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
   })
   return transporter
 }
 
 /** Best-effort send. Never throws — failures are logged so auth flows still succeed. */
 async function send(to: string, subject: string, html: string): Promise<void> {
+  // 1. Prefer Resend (HTTP) — works on serverless where SMTP often doesn't.
+  if (await sendViaResend(to, subject, html)) return
+
+  // 2. Fall back to Gmail SMTP.
   const t = getTransporter()
   if (!t) {
-    console.info(`[email:dev] To ${to} — ${subject}\n${html}`)
+    console.warn(`[email] No provider configured (set RESEND_API_KEY for production). Message for ${to} — ${subject}\n${html}`)
     return
   }
   try {
-    await t.sendMail({
-      from: `"SportsPulse" <${process.env.GMAIL_USER}>`,
-      to,
-      subject,
-      html,
-    })
+    await t.sendMail({ from: `"SportsPulse" <${process.env.GMAIL_USER}>`, to, subject, html })
   } catch (err) {
-    console.error('[email] send failed:', err)
+    console.error('[email] Gmail SMTP send failed (common on serverless — set RESEND_API_KEY):', err)
   }
 }
 
