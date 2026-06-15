@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react'
@@ -17,7 +17,7 @@ interface FormData {
   password: string
 }
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { login, setUser } = useUserAuth()
@@ -188,5 +188,13 @@ export default function LoginPage() {
         <Link href="/register" className="text-orange-500 hover:text-orange-600 hover:underline font-semibold">Sign up free</Link>
       </p>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="rounded-3xl border border-gray-100 bg-white shadow-xl shadow-gray-200/50 p-8 sm:p-10 text-center text-sm text-gray-400">Loading…</div>}>
+      <LoginPageInner />
+    </Suspense>
   )
 }
