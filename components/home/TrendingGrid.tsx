@@ -1,32 +1,58 @@
 import Link from 'next/link'
 import { Eye, Heart, Clock } from 'lucide-react'
-import { mockPosts } from '@/lib/mock-data/posts'
+import { prisma } from '@/lib/prisma'
 import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
 
-const sportVariants: Record<string, 'football' | 'basketball' | 'formula-1' | 'cricket'> = {
+const sportVariants: Record<string, 'football' | 'formula-1' | 'cricket'> = {
   Football: 'football',
-  Basketball: 'basketball',
   'Formula-1': 'formula-1',
   Cricket: 'cricket',
 }
 
 const sportEmoji: Record<string, string> = {
   Football: '⚽',
-  Basketball: '🏀',
   'Formula-1': '🏎️',
   Cricket: '🏏',
 }
 
-export default function TrendingGrid() {
-  const published = mockPosts.filter((p) => p.featured && p.status === 'published')
-  const pick = (sport: string) => published.find((p) => p.sport === sport)
-  const featured = [
-    pick('Football'),
-    pick('Formula-1'),
-    pick('Cricket'),
-    pick('Basketball'),
-  ].filter(Boolean) as typeof published
+export default async function TrendingGrid() {
+  // Show the 4 most recently published posts from the DB (any sport, no featured filter).
+  // This means any post published from the dashboard appears here immediately.
+  const posts = await prisma.post.findMany({
+    where: { status: 'published' },
+    orderBy: { createdAt: 'desc' },
+    take: 4,
+  })
+
+  if (posts.length === 0) {
+    return (
+      <section>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-xl font-bold text-gray-900">Trending Stories</h2>
+        </div>
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-center bg-gray-50 rounded-2xl border border-gray-100">
+          <span className="text-4xl">📰</span>
+          <p className="text-sm font-semibold text-gray-600">No stories published yet</p>
+          <p className="text-xs text-gray-400">Publish articles from the dashboard to see them here</p>
+        </div>
+      </section>
+    )
+  }
+
+  const displayPosts = posts.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    excerpt: p.excerpt,
+    sport: p.sport,
+    category: p.category,
+    image: p.image,
+    featured: p.featured,
+    views: p.views,
+    likes: p.likes,
+    publishedAt: (p.publishedAt ?? p.createdAt).toISOString().slice(0, 10),
+  }))
 
   return (
     <section>
@@ -35,7 +61,7 @@ export default function TrendingGrid() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {featured.map((post) => (
+        {displayPosts.map((post) => (
           <Link
             key={post.id}
             href={`/blog/${post.slug}`}
@@ -51,10 +77,9 @@ export default function TrendingGrid() {
                 />
               ) : (
                 <div className="h-full bg-linear-to-br from-orange-100 to-blue-50 flex items-center justify-center">
-                  <span className="text-6xl opacity-30 select-none">{sportEmoji[post.sport]}</span>
+                  <span className="text-6xl opacity-30 select-none">{sportEmoji[post.sport] ?? '📰'}</span>
                 </div>
               )}
-              {/* Gradient overlay so badge is always readable */}
               <div className="absolute inset-0 bg-linear-to-t from-black/50 via-transparent to-transparent" />
               {post.featured && (
                 <span className="absolute top-3 right-3 text-[10px] font-semibold bg-orange-500 text-white px-2 py-0.5 rounded-full">
@@ -62,7 +87,7 @@ export default function TrendingGrid() {
                 </span>
               )}
               <div className="absolute bottom-3 left-3">
-                <Badge variant={sportVariants[post.sport]}>{post.sport}</Badge>
+                <Badge variant={sportVariants[post.sport] ?? 'default'}>{post.sport}</Badge>
               </div>
             </div>
 

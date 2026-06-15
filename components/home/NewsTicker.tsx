@@ -5,11 +5,9 @@ import { Radio } from 'lucide-react'
 const tickerItems = [
   'BREAKING: Arsenal qualify for UCL Final',
   'Verstappen extends F1 championship lead after Monaco GP',
-  'Boston Celtics lead NBA Finals 1-0',
   "India take control at Lord's on Day 3",
   'Premier League title race: City, Arsenal, Liverpool separated by 5 points',
   'Mbappé scores hat-trick in Real Madrid derby',
-  'Jokić named NBA MVP for record 4th time',
 ]
 
 export default function NewsTicker() {

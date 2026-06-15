@@ -76,7 +76,7 @@ function YearSelect({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-xl z-30 overflow-hidden min-w-[110px]">
+        <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-xl z-30 overflow-hidden min-w-27.5">
           {years.map((y) => (
             <button
               key={y}
@@ -120,12 +120,8 @@ function DriverRow({ d, isLast }: { d: F1Driver; isLast: boolean }) {
           />
           <div>
             <div className="font-bold text-gray-900 text-sm leading-tight">{d.driver}</div>
-            <div className="text-[10px] text-gray-400 font-medium mt-0.5">{d.natCode}</div>
           </div>
         </div>
-      </td>
-      <td className="px-4 py-3">
-        <span className="text-base">{d.flag}</span>
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5">
@@ -213,7 +209,6 @@ function ScheduleCard({ item }: { item: F1ScheduleRace }) {
 
       {/* GP identity */}
       <div className="flex items-center gap-3 px-4 py-3">
-        <span className="text-4xl leading-none shrink-0">{item.flag}</span>
         <div className="min-w-0">
           <div className="font-extrabold text-gray-900 text-sm leading-tight truncate">{item.grandPrix}</div>
           <div className="text-[11px] text-gray-400 mt-0.5 truncate">{item.circuit}</div>
@@ -244,10 +239,10 @@ function ScheduleCard({ item }: { item: F1ScheduleRace }) {
         <div className="flex items-center gap-2 px-4 py-2.5 border-t border-gray-50 bg-gray-50/60">
           <Trophy className="h-3 w-3 text-yellow-500 shrink-0" />
           <span className="text-xs font-bold text-gray-800 truncate">
-            {item.winnerFlag} {item.winner}
+            {item.winner}
           </span>
           {item.winnerTeam && (
-            <span className="ml-auto text-[10px] text-gray-400 shrink-0 truncate max-w-[100px]">
+            <span className="ml-auto text-[10px] text-gray-400 shrink-0 truncate max-w-25">
               {item.winnerTeam}
             </span>
           )}
@@ -265,10 +260,38 @@ function ScheduleCard({ item }: { item: F1ScheduleRace }) {
 // ---- main page ----
 export default function Formula1Page() {
   const [selectedYear, setSelectedYear] = useState(2026)
-  const data = useMemo(() => f1Data[selectedYear], [selectedYear])
   const isCurrentSeason = selectedYear === 2026
 
+  // Live admin-managed data (mock stays as the fallback so the page is never blank).
+  const [remote, setRemote] = useState<Record<string, unknown> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/sports/formula-1', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((res) => { if (!cancelled) setRemote(res.data ?? {}) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sliceArr = (tab: string): any[] | null => {
+    const v = remote?.[`${selectedYear}::${tab}`]
+    return Array.isArray(v) ? v : null
+  }
+
+  const data = useMemo(() => {
+    const base = f1Data[selectedYear]
+    return {
+      races: (sliceArr('races') ?? base?.races ?? []) as typeof base.races,
+      drivers: (sliceArr('drivers') ?? base?.drivers ?? []) as F1Driver[],
+      teams: (sliceArr('teams') ?? base?.teams ?? []) as F1Team[],
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear, remote])
+
   const schedule = useMemo((): F1ScheduleRace[] => {
+    const fromDb = sliceArr('schedule')
+    if (fromDb && fromDb.length) return fromDb as F1ScheduleRace[]
     if (selectedYear === 2026) return f1Schedule2026
     return data.races.map((r) => ({
       round: r.round,
@@ -282,7 +305,8 @@ export default function Formula1Page() {
       winnerFlag: r.winnerFlag,
       winnerTeam: r.team,
     }))
-  }, [selectedYear, data.races])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear, remote, data.races])
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -313,7 +337,7 @@ export default function Formula1Page() {
           <div>
             <div className="text-[10px] font-bold text-red-500 uppercase tracking-wider">{selectedYear} World Champion</div>
             <div className="font-extrabold text-gray-900 text-lg leading-tight">
-              {data.drivers[0].flag} {data.drivers[0].driver}
+              {data.drivers[0].driver}
             </div>
           </div>
           <div className="ml-auto text-right">
@@ -330,7 +354,7 @@ export default function Formula1Page() {
           <div>
             <div className="text-[10px] font-bold text-red-100 uppercase tracking-wider">Season Leader</div>
             <div className="font-extrabold text-white text-lg leading-tight">
-              {data.drivers[0].flag} {data.drivers[0].driver}
+              {data.drivers[0].driver}
             </div>
           </div>
           <div className="ml-auto text-right">
@@ -353,7 +377,7 @@ export default function Formula1Page() {
         {/* RACES */}
         <TabsContent value="races">
           <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm min-w-170">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="px-4 py-3 text-left w-10 text-xs font-semibold text-gray-400 uppercase">#</th>
@@ -379,10 +403,9 @@ export default function Formula1Page() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <span className="text-lg leading-none">{race.flag}</span>
                         <div>
                           <div className="font-bold text-gray-900">{race.grandPrix}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[180px]">{race.circuit}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-45">{race.circuit}</div>
                         </div>
                       </div>
                     </td>
@@ -390,10 +413,7 @@ export default function Formula1Page() {
                       <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">{race.date}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm">{race.winnerFlag}</span>
-                        <span className="font-bold text-gray-900">{race.winner}</span>
-                      </div>
+                      <span className="font-bold text-gray-900">{race.winner}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
@@ -427,12 +447,11 @@ export default function Formula1Page() {
             </div>
 
             <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
-              <table className="w-full text-sm min-w-[400px]">
+              <table className="w-full text-sm min-w-100">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
                     <th className="px-4 py-3 text-center w-12 text-xs font-semibold text-gray-400 uppercase">Pos.</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Driver</th>
-                    <th className="px-4 py-3 text-center w-10 text-xs font-semibold text-gray-400 uppercase">Nat.</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Team</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase">Pts.</th>
                   </tr>

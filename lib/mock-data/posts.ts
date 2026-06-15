@@ -1,4 +1,4 @@
-export type Sport = 'Football' | 'Basketball' | 'Formula-1' | 'Cricket'
+export type Sport = 'Football' | 'Formula-1' | 'Cricket'
 export type PostStatus = 'published' | 'draft' | 'scheduled'
 
 export interface Post {
@@ -10,7 +10,9 @@ export interface Post {
   sport: Sport
   category: string
   author: string
+  authorName?: string
   authorEmail: string
+  authorRole?: string
   publishedAt: string
   image: string
   views: number
@@ -69,25 +71,6 @@ export const mockPosts: Post[] = [
     status: 'published',
     featured: true,
     tags: ['F1', 'Monaco', 'Verstappen', 'Race Results'],
-  },
-  {
-    id: '3',
-    slug: 'boston-celtics-nba-finals-game-1',
-    title: 'Celtics Edge Nuggets in Thrilling NBA Finals Game 1',
-    excerpt: 'Jayson Tatum delivered a 38-point masterpiece as the Boston Celtics survived a Denver comeback to win Game 1.',
-    content: `Jayson Tatum was nothing short of spectacular as the Boston Celtics defeated the Denver Nuggets 112-104 in a pulsating NBA Finals opener at TD Garden.\n\nTatum finished with 38 points, 9 rebounds, and 8 assists, repeatedly rising to the challenge when Denver threatened to wrestle control. Jaylen Brown added 22 points in a crucial supporting role.\n\nNikola Jokić was outstanding for Denver with a 31-point triple-double but it wasn't enough as the Celtics' depth ultimately proved decisive in the fourth quarter.`,
-    sport: 'Basketball',
-    category: 'NBA Finals',
-    author: 'sarah_editor',
-    authorEmail: 'sarah@sportspulse.com',
-    publishedAt: '2026-06-08',
-    image: '/Celtics.jfif',
-    views: 15600,
-    likes: 980,
-    shares: 215,
-    status: 'published',
-    featured: true,
-    tags: ['NBA', 'Finals', 'Celtics', 'Nuggets'],
   },
   {
     id: '4',

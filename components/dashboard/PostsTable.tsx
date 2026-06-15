@@ -41,7 +41,7 @@ export default function PostsTable() {
                   <p className="font-medium text-gray-800 truncate">{post.title}</p>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge variant={post.sport === 'Football' ? 'football' : post.sport === 'Basketball' ? 'basketball' : post.sport === 'Formula-1' ? 'formula-1' : 'cricket'}>
+                  <Badge variant={post.sport === 'Football' ? 'football' : post.sport === 'Formula-1' ? 'formula-1' : 'cricket'}>
                     {post.sport}
                   </Badge>
                 </td>

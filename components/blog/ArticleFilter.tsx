@@ -5,7 +5,7 @@ import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
-const sports = ['All', 'Football', 'Cricket', 'Formula-1', 'Basketball']
+const sports = ['All', 'Football', 'Cricket', 'Formula-1']
 
 interface Props {
   onFilter: (filters: { sport: string; search: string }) => void

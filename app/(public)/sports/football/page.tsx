@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { Calendar, MapPin, ChevronRight } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -17,46 +17,9 @@ import {
   footballPlayerDetails,
   type FormResult,
   type ZoneType,
+  type FootballStanding,
 } from '@/lib/mock-data/football'
-
-// UEFA Champions League 2025/26 knockout bracket
-const UCL_BRACKET: BracketRound[] = [
-  {
-    title: 'Round of 16',
-    matches: [
-      { date: '11 Mar', home: 'Real Madrid', away: 'Atalanta',        homeScore: 5, awayScore: 2, winner: 'home' },
-      { date: '11 Mar', home: 'Arsenal',     away: 'PSV Eindhoven',   homeScore: 3, awayScore: 1, winner: 'home' },
-      { date: '12 Mar', home: 'Liverpool',   away: 'Inter Milan',     homeScore: 4, awayScore: 3, winner: 'home' },
-      { date: '12 Mar', home: 'Barcelona',   away: 'Benfica',         homeScore: 6, awayScore: 2, winner: 'home' },
-      { date: '18 Mar', home: 'Man City',    away: 'Bayern Munich',   homeScore: 2, awayScore: 4, winner: 'away' },
-      { date: '18 Mar', home: 'Paris SG',    away: 'Dortmund',        homeScore: 3, awayScore: 2, winner: 'home' },
-      { date: '19 Mar', home: 'Leverkusen',  away: 'Atletico Madrid', homeScore: 2, awayScore: 3, winner: 'away' },
-      { date: '19 Mar', home: 'Aston Villa', away: 'Juventus',        homeScore: 1, awayScore: 2, winner: 'away' },
-    ],
-  },
-  {
-    title: 'Quarter-finals',
-    matches: [
-      { date: '08 Apr', home: 'Real Madrid',     away: 'Arsenal',    homeScore: 4, awayScore: 3, winner: 'home' },
-      { date: '09 Apr', home: 'Liverpool',       away: 'Barcelona',  homeScore: 2, awayScore: 1, winner: 'home' },
-      { date: '15 Apr', home: 'Bayern Munich',   away: 'Paris SG',   homeScore: 1, awayScore: 3, winner: 'away' },
-      { date: '16 Apr', home: 'Atletico Madrid', away: 'Juventus',   homeScore: 3, awayScore: 2, winner: 'home' },
-    ],
-  },
-  {
-    title: 'Semi-finals',
-    matches: [
-      { date: '29 Apr', home: 'Real Madrid',     away: 'Liverpool', homeScore: 3, awayScore: 4, winner: 'away' },
-      { date: '06 May', home: 'Paris SG',        away: 'Atletico Madrid', homeScore: 2, awayScore: 1, winner: 'home' },
-    ],
-  },
-  {
-    title: 'Final',
-    matches: [
-      { date: '30 May · Munich', home: 'Liverpool', away: 'Paris SG', homeScore: 1, awayScore: 2, winner: 'away' },
-    ],
-  },
-]
+import { DEFAULT_FOOTBALL_BRACKET, SPORT_LEAGUE_KEYS } from '@/lib/sports-data'
 
 function FormPill({ result }: { result: FormResult }) {
   return (
@@ -106,18 +69,6 @@ function crestColor(name: string): string {
 
 function TeamCrest({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
   const box = size === 'sm' ? 'h-7 w-7' : size === 'lg' ? 'h-12 w-12' : 'h-9 w-9'
-  const flag = leadingFlag(name)
-  if (flag) {
-    return (
-      <span className={cn(
-        'inline-flex items-center justify-center rounded-full bg-gray-50 border border-gray-200 shrink-0',
-        box,
-        size === 'sm' ? 'text-base' : size === 'lg' ? 'text-2xl' : 'text-lg',
-      )}>
-        {flag}
-      </span>
-    )
-  }
   const initials = stripFlag(name).split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
   return (
     <span className={cn(
@@ -140,7 +91,26 @@ function relativeLabel(date: string): string | null {
 }
 
 export default function FootballPage() {
-  const [selectedLeague, setSelectedLeague] = useState('all')
+  const [selectedLeague, setSelectedLeague] = useState('Premier League')
+
+  // Live admin-managed data (mock stays as the fallback so the page is never blank).
+  const [remote, setRemote] = useState<Record<string, unknown> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/sports/football', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((res) => { if (!cancelled) setRemote(res.data ?? {}) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sliceArr = (lg: string, tab: string): any[] | null => {
+    const v = remote?.[`${lg}::${tab}`]
+    return Array.isArray(v) ? v : null
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mergeAll = (tab: string): any[] => SPORT_LEAGUE_KEYS.football.flatMap((lg) => sliceArr(lg, tab) ?? [])
 
   const currentLeague = useMemo(
     () => FOOTBALL_LEAGUES.find((l) => l.id === selectedLeague) ?? FOOTBALL_LEAGUES[0],
@@ -159,17 +129,47 @@ export default function FootballPage() {
 
   const standings = useMemo(() => {
     const key = selectedLeague === 'all' ? 'Premier League' : selectedLeague
-    return leagueStandings[key] ?? leagueStandings['Premier League']
-  }, [selectedLeague])
+    return (sliceArr(key, 'standings') ?? leagueStandings[key] ?? leagueStandings['Premier League']) as FootballStanding[]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
 
-  const scores = useMemo(() => leagueScores[selectedLeague] ?? leagueScores['all'], [selectedLeague])
-  const schedule = useMemo(() => leagueSchedule[selectedLeague] ?? leagueSchedule['all'], [selectedLeague])
+  const scores = useMemo(() => {
+    if (selectedLeague === 'all') {
+      const merged = remote ? mergeAll('scores') : null
+      return merged && merged.length ? merged : leagueScores['all']
+    }
+    return sliceArr(selectedLeague, 'scores') ?? leagueScores[selectedLeague] ?? leagueScores['all']
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
+
+  const schedule = useMemo(() => {
+    if (selectedLeague === 'all') {
+      const merged = remote ? mergeAll('schedule') : null
+      return merged && merged.length ? merged : leagueSchedule['all']
+    }
+    return sliceArr(selectedLeague, 'schedule') ?? leagueSchedule[selectedLeague] ?? leagueSchedule['all']
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
 
   const players = useMemo(() => {
-    if (selectedLeague === 'all') return footballPlayerDetails
+    if (selectedLeague === 'all') {
+      const merged = remote ? mergeAll('players') : null
+      return merged && merged.length ? merged : footballPlayerDetails
+    }
+    const fromDb = sliceArr(selectedLeague, 'players')
+    if (fromDb) return fromDb.length ? fromDb : footballPlayerDetails
     const filtered = footballPlayerDetails.filter((p) => p.league === selectedLeague)
     return filtered.length > 0 ? filtered : footballPlayerDetails
-  }, [selectedLeague])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
+
+  const tournament = useMemo(() => {
+    const r = remote?.[`${selectedLeague}::tournament`]
+    if (Array.isArray(r) && r.length) return r as BracketRound[]
+    // Before DB loads: show UCL default for Champions League only
+    if (!remote && selectedLeague === 'Champions League') return DEFAULT_FOOTBALL_BRACKET as BracketRound[]
+    return [] as BracketRound[]
+  }, [selectedLeague, remote])
 
   const standingsTitle =
     selectedLeague === 'all' ? 'Premier League 2025/26' : `${selectedLeague} 2025/26`
@@ -187,7 +187,7 @@ export default function FootballPage() {
 
       {/* League filter pills */}
       <div className="flex flex-wrap gap-2 mb-5">
-        {FOOTBALL_LEAGUES.map((league) => {
+        {FOOTBALL_LEAGUES.filter((l) => l.id !== 'all').map((league) => {
           const active = selectedLeague === league.id
           return (
             <button
@@ -503,14 +503,32 @@ export default function FootballPage() {
 
         {/* TOURNAMENT */}
         <TabsContent value="tournament">
-          <div className="flex items-center gap-3 mb-5">
-            <img src="/ucl logo.png" alt="Champions League" className="h-8 w-8 object-contain" />
-            <div>
-              <h3 className="font-bold text-gray-900 text-lg leading-tight">Champions League Knockouts</h3>
-              <p className="text-gray-400 text-sm">2025/26 · Road to the Munich Final</p>
+          {tournament.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <span className="text-4xl">🏆</span>
+              <p className="text-sm font-semibold text-gray-600">
+                No tournament bracket for {selectedLeague}
+              </p>
+              <p className="text-xs text-gray-400">
+                No bracket set for {selectedLeague}. Upload it from the dashboard.
+              </p>
             </div>
-          </div>
-          <TournamentBracket rounds={UCL_BRACKET} />
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-5">
+                {currentLeague.logo ? (
+                  <img src={currentLeague.logo} alt={currentLeague.name} className="h-8 w-8 object-contain" />
+                ) : (
+                  <span className="text-2xl">{currentLeague.emoji}</span>
+                )}
+                <div>
+                  <h3 className="font-bold text-gray-900 text-lg leading-tight">{currentLeague.name} Knockouts</h3>
+                  <p className="text-gray-400 text-sm">2025/26 Season</p>
+                </div>
+              </div>
+              <TournamentBracket rounds={tournament} />
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -5,12 +5,11 @@ const sports = [
   { name: 'Football', href: '/sports/football', emoji: '⚽', desc: 'Premier League, UCL, La Liga & more', bg: 'from-green-50 to-emerald-50', border: 'hover:border-green-300 hover:shadow-green-100' },
   { name: 'Cricket', href: '/sports/cricket', emoji: '🏏', desc: 'Test, ODI, T20 & ICC tournaments', bg: 'from-blue-50 to-sky-50', border: 'hover:border-blue-300 hover:shadow-blue-100' },
   { name: 'Formula-1', href: '/sports/formula-1', emoji: '🏎️', desc: 'Race results, standings & driver profiles', bg: 'from-red-50 to-rose-50', border: 'hover:border-red-300 hover:shadow-red-100' },
-  { name: 'Basketball', href: '/sports/basketball', emoji: '🏀', desc: 'NBA, FIBA & international basketball', bg: 'from-orange-50 to-amber-50', border: 'hover:border-orange-300 hover:shadow-orange-100' },
 ]
 
 export default function SportCard() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       {sports.map((sport) => (
         <Link
           key={sport.name}

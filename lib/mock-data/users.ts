@@ -3,6 +3,7 @@ export type Role = 'user' | 'editor' | 'moderator' | 'admin' | 'superadmin'
 export interface User {
   id: string
   username: string
+  name?: string
   email: string
   role: Role
   avatar: string
@@ -16,6 +17,7 @@ export const mockUsers: User[] = [
   {
     id: '1',
     username: 'john_doe',
+    name: 'John Doe',
     email: 'john@sportspulse.com',
     role: 'user',
     avatar: '',
@@ -27,6 +29,7 @@ export const mockUsers: User[] = [
   {
     id: '2',
     username: 'sarah_editor',
+    name: 'Sarah Johnson',
     email: 'sarah@sportspulse.com',
     role: 'editor',
     avatar: '',
@@ -38,6 +41,7 @@ export const mockUsers: User[] = [
   {
     id: '3',
     username: 'mike_mod',
+    name: 'Mike Thompson',
     email: 'mike@sportspulse.com',
     role: 'moderator',
     avatar: '',
@@ -49,6 +53,7 @@ export const mockUsers: User[] = [
   {
     id: '4',
     username: 'admin_alex',
+    name: 'Alex Carter',
     email: 'alex@sportspulse.com',
     role: 'admin',
     avatar: '',
@@ -60,7 +65,8 @@ export const mockUsers: User[] = [
   {
     id: '5',
     username: 'superadmin',
-    email: 'super@sportspulse.com',
+    name: 'Super Admin',
+    email: 'fyp.infoo@gmail.com',
     role: 'superadmin',
     avatar: '',
     bio: 'System owner and super administrator.',
@@ -100,4 +106,30 @@ export const failedLoginAttempts = [
 export const ipBlockList = [
   { id: '1', ip: '203.44.12.3', reason: 'Brute force attempt', addedBy: 'admin_alex', date: '2026-06-11' },
   { id: '2', ip: '185.220.101.5', reason: 'Bot scraping', addedBy: 'superadmin', date: '2026-06-10' },
+]
+
+export type IPStatus = 'blocked' | 'suspicious' | 'clean'
+export type ThreatLevel = 'high' | 'medium' | 'low'
+
+export interface SuspiciousIP {
+  id: string
+  ip: string
+  country: string
+  city: string
+  network: string
+  status: IPStatus
+  threat: ThreatLevel
+  attempts: number
+  lastSeen: string
+}
+
+export const suspiciousIPs: SuspiciousIP[] = [
+  { id: '1', ip: '203.44.12.3',      country: 'Nigeria',       city: 'Lagos',          network: 'MTN Nigeria · AS29465',    status: 'blocked',    threat: 'high',   attempts: 8,  lastSeen: '2026-06-11 08:55' },
+  { id: '2', ip: '45.155.205.100',   country: 'Russia',        city: 'Moscow',         network: 'Selectel · AS49505',       status: 'suspicious', threat: 'medium', attempts: 3,  lastSeen: '2026-06-11 07:20' },
+  { id: '3', ip: '185.220.101.5',    country: 'Netherlands',   city: 'Amsterdam',      network: 'Tor Exit Node · AS200052', status: 'blocked',    threat: 'high',   attempts: 15, lastSeen: '2026-06-10 23:40' },
+  { id: '4', ip: '91.108.56.22',     country: 'Iran',          city: 'Tehran',         network: 'TCI · AS12880',            status: 'suspicious', threat: 'high',   attempts: 5,  lastSeen: '2026-06-10 18:30' },
+  { id: '5', ip: '104.244.72.15',    country: 'United States', city: 'Chicago',        network: 'Mullvad VPN · AS39351',    status: 'suspicious', threat: 'medium', attempts: 2,  lastSeen: '2026-06-10 15:10' },
+  { id: '6', ip: '178.73.215.71',    country: 'Ukraine',       city: 'Kyiv',           network: 'DataLine · AS50817',       status: 'clean',      threat: 'low',    attempts: 1,  lastSeen: '2026-06-09 22:00' },
+  { id: '7', ip: '5.188.62.140',     country: 'Russia',        city: 'St. Petersburg', network: 'Reg.ru · AS197695',        status: 'blocked',    threat: 'high',   attempts: 22, lastSeen: '2026-06-09 11:15' },
+  { id: '8', ip: '193.32.162.101',   country: 'Germany',       city: 'Frankfurt',      network: 'NJALLA · AS39830',         status: 'suspicious', threat: 'medium', attempts: 4,  lastSeen: '2026-06-08 09:45' },
 ]

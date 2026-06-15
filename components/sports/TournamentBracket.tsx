@@ -16,6 +16,7 @@ export interface BracketMatch {
   homeScore?: string | number | null
   awayScore?: string | number | null
   winner?: 'home' | 'away' | null
+  venue?: string
 }
 
 export interface BracketRound {

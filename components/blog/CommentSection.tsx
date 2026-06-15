@@ -1,9 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Send, MessageSquare, Lock } from 'lucide-react'
-import { useAuthStore } from '@/lib/store/auth-store'
-import { mockComments } from '@/lib/mock-data/posts'
+import { useUserAuth } from '@/lib/store/auth-store'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import Link from 'next/link'
@@ -12,18 +11,56 @@ interface Props {
   postId: string
 }
 
+interface ApiComment {
+  id: string
+  author: string
+  content: string
+  date: string
+}
+
 export default function CommentSection({ postId }: Props) {
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated } = useUserAuth()
   const [comment, setComment] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [comments, setComments] = useState<ApiComment[]>([])
 
-  const comments = mockComments.filter((c) => c.postId === postId && c.status === 'approved')
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/comments?postId=${encodeURIComponent(postId)}`, { cache: 'no-store' })
+      const json = await res.json()
+      if (res.ok) setComments(json.comments ?? [])
+    } catch {
+      /* ignore */
+    }
+  }, [postId])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => { load() }, [load])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!comment.trim()) return
-    setSubmitted(true)
-    setComment('')
+    setError('')
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, content: comment }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Could not post comment')
+        return
+      }
+      setComment('')
+      setSubmitted(true) // pending moderation — not shown until approved
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -41,6 +78,11 @@ export default function CommentSection({ postId }: Props) {
               Your comment has been submitted for review.
             </div>
           )}
+          {error && (
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3">
+              {error}
+            </div>
+          )}
           <Textarea
             placeholder="Share your thoughts..."
             value={comment}
@@ -50,8 +92,8 @@ export default function CommentSection({ postId }: Props) {
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400">Commenting as <span className="text-gray-700 font-medium">{user?.username}</span></span>
-            <Button type="submit" size="sm" variant="primary" disabled={!comment.trim()}>
-              <Send className="h-4 w-4" /> Post Comment
+            <Button type="submit" size="sm" variant="primary" disabled={!comment.trim() || submitting}>
+              <Send className="h-4 w-4" /> {submitting ? 'Posting…' : 'Post Comment'}
             </Button>
           </div>
         </form>
@@ -70,6 +112,9 @@ export default function CommentSection({ postId }: Props) {
 
       {/* Comments list */}
       <div className="flex flex-col gap-4">
+        {comments.length === 0 && (
+          <p className="text-sm text-gray-400">No comments yet. Be the first to share your thoughts.</p>
+        )}
         {comments.map((c) => (
           <div key={c.id} className="flex gap-3">
             <div className="h-9 w-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-sm font-bold shrink-0">

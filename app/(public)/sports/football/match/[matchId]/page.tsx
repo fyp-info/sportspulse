@@ -1,10 +1,51 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, User, Users, Calendar } from 'lucide-react'
-import { matchDetails } from '@/lib/mock-data/football'
+import { matchDetails, type MatchDetail } from '@/lib/mock-data/football'
+import { prisma } from '@/lib/prisma'
+import { mockSlice, SPORT_LEAGUE_KEYS } from '@/lib/sports-data'
 
 interface Props {
   params: Promise<{ matchId: string }>
+}
+
+// Detailed stats pages aren't editable yet, so a match created/edited from the
+// dashboard (or an upcoming fixture) won't have a rich entry in `matchDetails`.
+// Fall back to a basic header built from the live scores/schedule data so the
+// card links never 404.
+async function basicMatch(matchId: string): Promise<MatchDetail | null> {
+  const rows = await prisma.sportsData.findMany({
+    where: { sport: 'football', tab: { in: ['scores', 'schedule'] } },
+  })
+  const saved = new Map(rows.map((r) => [`${r.league}::${r.tab}`, r.data]))
+  for (const league of SPORT_LEAGUE_KEYS.football) {
+    for (const tab of ['scores', 'schedule']) {
+      const key = `${league}::${tab}`
+      const list = saved.has(key) ? saved.get(key) : mockSlice('football', league, tab)
+      if (!Array.isArray(list)) continue
+      const hit = list.find((m) => m && (m as { id?: string }).id === matchId) as Record<string, unknown> | undefined
+      if (hit) {
+        return {
+          id: String(hit.id),
+          homeTeam: String(hit.homeTeam ?? ''),
+          awayTeam: String(hit.awayTeam ?? ''),
+          homeScore: hit.homeScore == null ? null : Number(hit.homeScore),
+          awayScore: hit.awayScore == null ? null : Number(hit.awayScore),
+          status: String(hit.status ?? 'vs'),
+          competition: String(hit.competition ?? league),
+          league: String(hit.league ?? league),
+          date: String(hit.date ?? ''),
+          time: String(hit.time ?? ''),
+          venue: String(hit.venue ?? ''),
+          homeFlag: hit.homeFlag as string | undefined,
+          awayFlag: hit.awayFlag as string | undefined,
+          referee: '—',
+          attendance: '—',
+        }
+      }
+    }
+  }
+  return null
 }
 
 function StatBar({ label, home, away }: { label: string; home: number; away: number }) {
@@ -27,7 +68,29 @@ function StatBar({ label, home, away }: { label: string; home: number; away: num
 
 export default async function MatchDetailPage({ params }: Props) {
   const { matchId } = await params
-  const match = matchDetails[matchId]
+  const dbMatch = await basicMatch(matchId)
+  const richMock = matchDetails[matchId]
+  // DB wins for all live-editable fields; mock fills in rich supplementary data (goals, stats, lineups).
+  const match: MatchDetail | null = dbMatch
+    ? ({
+        ...(richMock ?? {}),
+        id: dbMatch.id,
+        homeTeam: dbMatch.homeTeam,
+        awayTeam: dbMatch.awayTeam,
+        homeScore: dbMatch.homeScore,
+        awayScore: dbMatch.awayScore,
+        status: dbMatch.status,
+        competition: dbMatch.competition,
+        league: dbMatch.league,
+        date: dbMatch.date,
+        time: dbMatch.time,
+        venue: dbMatch.venue || richMock?.venue || '',
+        homeFlag: dbMatch.homeFlag ?? richMock?.homeFlag,
+        awayFlag: dbMatch.awayFlag ?? richMock?.awayFlag,
+        referee: richMock?.referee ?? '—',
+        attendance: richMock?.attendance ?? '—',
+      } as MatchDetail)
+    : (richMock ?? null)
   if (!match) notFound()
 
   const isUpcoming = match.homeScore === null

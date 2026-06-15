@@ -1,67 +1,103 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { type Role, mockUsers } from '@/lib/mock-data/users'
+import type { Role } from '@/lib/auth/roles'
 
-interface AuthUser {
+export type AuthRealm = 'user' | 'staff'
+export type LoginScope = 'user' | 'staff' | 'superadmin'
+
+export interface AuthUser {
   id: string
   username: string
+  name: string
   email: string
   role: Role
   avatar: string
   bio: string
+  emailVerified: boolean
+  twoFactorEnabled: boolean
+}
+
+interface LoginResult {
+  ok: boolean
+  user?: AuthUser
+  error?: string
+  twoFactor?: boolean
+  challengeId?: string
+  needsVerification?: boolean
+  email?: string
 }
 
 interface AuthState {
   user: AuthUser | null
   isAuthenticated: boolean
-  login: (email: string) => void
-  logout: () => void
-  switchRole: (role: Role) => void
+  loading: boolean
+  hydrate: () => Promise<void>
+  login: (identifier: string, password: string, scope?: LoginScope) => Promise<LoginResult>
+  logout: () => Promise<void>
+  setUser: (user: AuthUser | null) => void
 }
 
-const roleUsers: Record<Role, AuthUser> = {
-  user: mockUsers[0],
-  editor: mockUsers[1],
-  moderator: mockUsers[2],
-  admin: mockUsers[3],
-  superadmin: mockUsers[4],
+// Each realm gets its own independent store + cookie, so a member session and a
+// staff session never interfere with each other.
+function makeAuthStore(realm: AuthRealm, defaultScope: LoginScope) {
+  return create<AuthState>((set) => ({
+    user: null,
+    isAuthenticated: false,
+    loading: true,
+
+    hydrate: async () => {
+      try {
+        const res = await fetch(`/api/auth/me?realm=${realm}`, { cache: 'no-store' })
+        const data = await res.json()
+        set({ user: data.user ?? null, isAuthenticated: !!data.user, loading: false })
+      } catch {
+        set({ user: null, isAuthenticated: false, loading: false })
+      }
+    },
+
+    login: async (identifier, password, scope) => {
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password, scope: scope ?? defaultScope }),
+        })
+        const data = await res.json()
+        if (!res.ok) return { ok: false, error: data.error ?? 'Login failed' }
+        // Unverified email → no session yet; caller must collect the emailed code.
+        if (data.needsVerification) return { ok: true, needsVerification: true, email: data.email }
+        // 2FA enabled → no session yet; caller must collect the emailed code.
+        if (data.twoFactor) return { ok: true, twoFactor: true, challengeId: data.challengeId }
+        set({ user: data.user, isAuthenticated: true, loading: false })
+        return { ok: true, user: data.user }
+      } catch {
+        return { ok: false, error: 'Network error. Please try again.' }
+      }
+    },
+
+    logout: async () => {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ realm }),
+        })
+      } catch {
+        /* ignore */
+      }
+      set({ user: null, isAuthenticated: false })
+    },
+
+    setUser: (user) => set({ user, isAuthenticated: !!user }),
+  }))
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      isAuthenticated: false,
-      login: (email: string) => {
-        const found = mockUsers.find((u) => u.email === email) ?? mockUsers[0]
-        set({ user: found, isAuthenticated: true })
-      },
-      logout: () => set({ user: null, isAuthenticated: false }),
-      switchRole: (role: Role) => {
-        set({ user: roleUsers[role], isAuthenticated: true })
-      },
-    }),
-    { name: 'sportspulse-auth' }
-  )
-)
+// Public site (members) and dashboard (staff) — two separate sessions.
+export const useUserAuth = makeAuthStore('user', 'user')
+export const useStaffAuth = makeAuthStore('staff', 'staff')
 
-export const ROLE_PERMISSIONS: Record<string, Role[]> = {
-  viewPublic: ['user', 'editor', 'moderator', 'admin', 'superadmin'],
-  comment: ['user', 'editor', 'moderator', 'admin', 'superadmin'],
-  writePost: ['editor', 'moderator', 'admin', 'superadmin'],
-  editOwnPost: ['editor', 'moderator', 'admin', 'superadmin'],
-  editAnyPost: ['moderator', 'admin', 'superadmin'],
-  moderateComments: ['moderator', 'admin', 'superadmin'],
-  banUser: ['moderator', 'admin', 'superadmin'],
-  manageUsers: ['admin', 'superadmin'],
-  assignRoles: ['admin', 'superadmin'],
-  viewAuditLogs: ['admin', 'superadmin'],
-  systemSettings: ['superadmin'],
-}
-
-export function hasPermission(role: Role | undefined, permission: string): boolean {
-  if (!role) return false
-  return ROLE_PERMISSIONS[permission]?.includes(role) ?? false
-}
+// When a dashboard (staff) component calls a shared member-level endpoint
+// (e.g. /api/profile, /api/upload), include this header so the server uses the
+// staff session rather than the member one.
+export const STAFF_REALM_HEADER = { 'x-auth-realm': 'staff' } as const

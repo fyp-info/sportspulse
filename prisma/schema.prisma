@@ -1,0 +1,364 @@
+// SportsPulse — Prisma 7 schema (PostgreSQL via driver adapter)
+// Sports reference data (football/cricket/f1) stays static in lib/mock-data.
+// This models only user-generated / admin-managed data.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  user
+  editor
+  moderator
+  admin
+  superadmin
+}
+
+enum PostStatus {
+  published
+  draft
+  scheduled
+}
+
+enum CommentStatus {
+  approved
+  pending
+  rejected
+}
+
+enum NotifCategory {
+  sports
+  blog
+  legal
+  system
+}
+
+enum IPStatus {
+  blocked
+  suspicious
+  clean
+}
+
+enum ThreatLevel {
+  high
+  medium
+  low
+}
+
+enum TokenType {
+  email_verify
+  password_reset
+  two_factor
+}
+
+model User {
+  id                String   @id @default(cuid())
+  username          String   @unique
+  name              String   @default("")
+  email             String   @unique
+  passwordHash      String
+  role              Role     @default(user)
+  avatar            String   @default("")
+  bio               String   @default("")
+  isActive          Boolean  @default(true)
+  emailVerified     Boolean  @default(false)
+  twoFactorEnabled        Boolean  @default(false)
+  twoFactorGraceRemaining Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastLogin         DateTime?
+
+  posts         Post[]
+  comments      Comment[]
+  loginHistory  LoginHistory[]
+  notifications Notification[]
+  sessions      Session[]
+  tokens        VerificationToken[]
+  notifPref     NotificationPref?
+  resetRequests PasswordResetRequest[]
+  bookmarks     Bookmark[]
+
+  @@index([role])
+}
+
+enum ResetRequestStatus {
+  pending
+  resolved
+  rejected
+}
+
+model PasswordResetRequest {
+  id        String             @id @default(cuid())
+  userId    String?
+  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email     String
+  fullName  String             @default("")
+  message   String             @default("")
+  role      Role? // requester's role at submit time, for access filtering
+  status    ResetRequestStatus @default(pending)
+  createdAt DateTime           @default(now())
+
+  @@index([status])
+}
+
+model NotificationPref {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sports    Boolean  @default(true)
+  blog      Boolean  @default(true)
+  legal     Boolean  @default(true)
+  system    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  id        String    @id @default(cuid())
+  token     String    @unique // email-verify/reset link token, or 2FA challenge id
+  otp       String? // bcrypt hash of the 6-digit code (two_factor only)
+  attempts  Int       @default(0) // wrong-code tries; locks the code after 5 (brute-force guard)
+  type      TokenType
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Server-side denylist for invalidated JWTs. On logout the current token's `jti`
+// is stored here until its natural expiry, so a copied/leaked token stops
+// working immediately instead of staying valid for its full TTL.
+model RevokedToken {
+  id        String   @id @default(cuid())
+  jti       String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device     String
+  ip         String
+  location   String
+  current    Boolean  @default(false)
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip        String
+  device    String
+  location  String
+  status    String // "success" | "failed"
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model FailedLogin {
+  id          String   @id @default(cuid())
+  ip          String
+  attempts    Int      @default(1)
+  lastAttempt DateTime @default(now())
+  country     String   @default("")
+  blocked     Boolean  @default(false)
+}
+
+model BlockedIp {
+  id        String   @id @default(cuid())
+  ip        String   @unique
+  reason    String
+  addedBy   String
+  createdAt DateTime @default(now())
+}
+
+model SuspiciousIp {
+  id       String      @id @default(cuid())
+  ip       String
+  country  String
+  city     String
+  network  String
+  status   IPStatus    @default(suspicious)
+  threat   ThreatLevel @default(medium)
+  attempts Int         @default(1)
+  lastSeen DateTime    @default(now())
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  title       String
+  excerpt     String
+  content     String
+  sport       String // "Football" | "Formula-1" | "Cricket"
+  category    String
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  image       String     @default("")
+  views       Int        @default(0)
+  likes       Int        @default(0)
+  shares      Int        @default(0)
+  status      PostStatus @default(published)
+  featured    Boolean    @default(false)
+  tags        String[]   @default([])
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  comments  Comment[]
+  bookmarks Bookmark[]
+
+  @@index([authorId])
+  @@index([status])
+  @@index([sport])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([userId])
+}
+
+// Site-wide configuration (single row). `maintenanceMode` takes the public
+// website offline for visitors while the dashboards and staff portals stay up.
+model SiteConfig {
+  id              String   @id @default(cuid())
+  maintenanceMode Boolean  @default(false)
+  updatedBy       String   @default("")
+  updatedAt       DateTime @updatedAt
+}
+
+// Configurable role-permission matrix. One row per permission; the boolean
+// columns say which roles hold it. Edited by the superadmin and read by the
+// dashboards so grants persist and admins only see what they were given.
+model RolePermission {
+  id         String   @id @default(cuid())
+  permission String   @unique // stable key, e.g. "blog", "moderate_comments"
+  label      String           // human label shown in the matrix
+  order      Int      @default(0)
+  user       Boolean  @default(false)
+  editor     Boolean  @default(false)
+  moderator  Boolean  @default(false)
+  admin      Boolean  @default(false)
+  superadmin Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+}
+
+model HomeBanner {
+  id           String   @id @default(cuid())
+  badge        String   @default("Watch Stats and Score")
+  headline     String   @default("Your Pulse on the World of Sports")
+  accentWord   String   @default("Pulse")
+  description  String   @default("Football, Cricket, Formula-1 — breaking news, live scores, standings, and expert analysis all in one place.")
+  primaryBtn   String   @default("Latest News")
+  primaryUrl   String   @default("/blog")
+  secondaryBtn String   @default("Explore Sports")
+  secondaryUrl String   @default("/sports/football")
+  imageUrl     String   @default("/Sport-banner.jpg")
+  updatedAt    DateTime @updatedAt
+  updatedBy    String   @default("")
+}
+
+model Comment {
+  id         String        @id @default(cuid())
+  postId     String
+  post       Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName String
+  content    String
+  status     CommentStatus @default(pending)
+  reported   Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@index([postId])
+  @@index([status])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  read      Boolean  @default(false)
+  replied   Boolean  @default(false)
+  replyText String?
+  repliedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String        @id @default(cuid())
+  category  NotifCategory
+  title     String
+  body      String
+  href      String        @default("")
+  read      Boolean       @default(false)
+  userId    String? // null = global broadcast
+  user      User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  target    String
+  ip        String   @default("")
+  category  String   @default("system")
+  status    String   @default("success")
+  createdAt DateTime @default(now())
+}
+
+model LegalDoc {
+  id        String   @id @default(cuid())
+  type      String   @unique // "privacy" | "terms"
+  content   Json
+  updatedAt DateTime @updatedAt
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+// Admin-managed sports data. One row per (sport, league, tab) slice — the
+// unique key makes every edit touch exactly one slice, so updating one league
+// or tab can never affect another. `data` holds the slice in the exact shape
+// the public pages render (FootballMatch[]/FootballStanding[]/F1Race[]/…).
+model SportsData {
+  id        String   @id @default(cuid())
+  sport     String // "football" | "cricket" | "formula-1"
+  league    String // league name or season, e.g. "Premier League", "IPL", "2026"
+  tab       String // "scores" | "standings" | "players" | "schedule" | "tournament" | "races" | "drivers" | "teams"
+  data      Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([sport, league, tab])
+  @@index([sport])
+}

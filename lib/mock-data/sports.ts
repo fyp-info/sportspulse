@@ -18,15 +18,6 @@ export const f1Standings = [
   { pos: 8, driver: 'Fernando Alonso', team: 'Aston Martin', nationality: '🇪🇸 ESP', points: 76 },
 ]
 
-export const nbaStandings = [
-  { pos: 1, team: 'Boston Celtics', conf: 'East', won: 58, lost: 14, pct: '.806', gb: '-' },
-  { pos: 2, team: 'New York Knicks', conf: 'East', won: 47, lost: 25, pct: '.653', gb: '11' },
-  { pos: 3, team: 'Milwaukee Bucks', conf: 'East', won: 42, lost: 30, pct: '.583', gb: '16' },
-  { pos: 1, team: 'Oklahoma City Thunder', conf: 'West', won: 57, lost: 15, pct: '.792', gb: '-' },
-  { pos: 2, team: 'Denver Nuggets', conf: 'West', won: 51, lost: 21, pct: '.708', gb: '6' },
-  { pos: 3, team: 'LA Clippers', conf: 'West', won: 44, lost: 28, pct: '.611', gb: '13' },
-]
-
 export const iplStandings = [
   { pos: 1, team: 'Kolkata Knight Riders', played: 11, won: 8, lost: 3, nrr: '+1.24', points: 16 },
   { pos: 2, team: 'Rajasthan Royals', played: 11, won: 8, lost: 3, nrr: '+0.76', points: 16 },
@@ -68,16 +59,6 @@ export const upcomingMatches = [
   },
   {
     id: 4,
-    sport: 'Basketball',
-    competition: 'NBA Finals',
-    homeTeam: 'Boston Celtics',
-    awayTeam: 'Denver Nuggets',
-    date: '2026-06-17',
-    time: '21:00',
-    venue: 'TD Garden',
-  },
-  {
-    id: 5,
     sport: 'Football',
     competition: 'UEFA Nations League',
     homeTeam: '🇫🇷 France',
@@ -240,16 +221,6 @@ export const recentScores = [
   },
   {
     id: 3,
-    sport: 'Basketball',
-    homeTeam: 'Boston Celtics',
-    awayTeam: 'New York Knicks',
-    homeScore: 112,
-    awayScore: 104,
-    status: 'Final',
-    competition: 'NBA',
-  },
-  {
-    id: 4,
     sport: 'F1',
     homeTeam: '🇳🇱 Verstappen',
     awayTeam: '🇬🇧 Norris',

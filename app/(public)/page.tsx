@@ -1,5 +1,4 @@
 import HeroBanner from '@/components/home/HeroBanner'
-import NewsTicker from '@/components/home/NewsTicker'
 import TrendingGrid from '@/components/home/TrendingGrid'
 import UpcomingMatches from '@/components/home/UpcomingMatches'
 import SportCard from '@/components/sports/SportCard'
@@ -9,7 +8,6 @@ export default function HomePage() {
   return (
     <div className="container mx-auto px-4 py-8 space-y-10">
       <HeroBanner />
-      <NewsTicker />
 
       <section>
         <div className="flex items-center justify-between mb-5">

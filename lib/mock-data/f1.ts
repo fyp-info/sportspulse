@@ -48,7 +48,7 @@ export interface F1ScheduleRace {
   winnerTeam?: string
 }
 
-export const F1_YEARS = [2026, 2025, 2024, 2023, 2022]
+export const F1_YEARS = [2026, 2025, 2024]
 
 export const f1Data: Record<number, F1SeasonData> = {
   2026: {

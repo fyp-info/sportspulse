@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Calendar, MapPin, X } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import Link from 'next/link'
+import { Calendar, MapPin, X, ChevronRight } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import TournamentBracket, { type BracketRound } from '@/components/sports/TournamentBracket'
@@ -15,33 +16,9 @@ import {
   type FormResult,
   type CricketZoneType,
   type CricketPlayerDetail,
+  type CricketStanding,
 } from '@/lib/mock-data/cricket'
-
-// ICC T20 World Cup 2026 knockout bracket
-const T20_BRACKET: BracketRound[] = [
-  {
-    title: 'Quarter-finals',
-    matches: [
-      { date: '24 Jun', home: '🇮🇳 India',        away: '🇦🇺 Australia',    homeScore: '186/4', awayScore: '171/9', winner: 'home' },
-      { date: '25 Jun', home: '🇬🇧 England',      away: 'West Indies',      homeScore: '192/6', awayScore: '188/7', winner: 'home' },
-      { date: '26 Jun', home: '🇿🇦 South Africa', away: '🇳🇿 New Zealand',  homeScore: '165/5', awayScore: '160/8', winner: 'home' },
-      { date: '27 Jun', home: '🇵🇰 Pakistan',     away: '🇦🇫 Afghanistan',  homeScore: '178/3', awayScore: '154/9', winner: 'home' },
-    ],
-  },
-  {
-    title: 'Semi-finals',
-    matches: [
-      { date: '01 Jul', home: '🇮🇳 India',        away: '🇬🇧 England',   homeScore: '195/5', awayScore: '173/8', winner: 'home' },
-      { date: '02 Jul', home: '🇿🇦 South Africa', away: '🇵🇰 Pakistan',  homeScore: '169/6', awayScore: '162/8', winner: 'home' },
-    ],
-  },
-  {
-    title: 'Final',
-    matches: [
-      { date: '05 Jul · Bridgetown', home: '🇮🇳 India', away: '🇿🇦 South Africa', homeScore: '176/7', awayScore: '169/8', winner: 'home' },
-    ],
-  },
-]
+import { DEFAULT_CRICKET_BRACKET, SPORT_LEAGUE_KEYS } from '@/lib/sports-data'
 
 function FormPill({ result }: { result: FormResult }) {
   return (
@@ -169,7 +146,6 @@ function CricketPlayerModal({ player, onClose }: { player: CricketPlayerDetail; 
               <div className="text-sm text-orange-100 mt-0.5">{player.team}</div>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className="text-xs bg-white/20 text-white border border-white/20 px-2 py-0.5 rounded-full font-medium">{player.role}</span>
-                <span className="text-base">{player.flag}</span>
                 <span className="text-xs text-orange-100">{player.nationality}</span>
               </div>
             </div>
@@ -281,7 +257,6 @@ function CricketPlayers({ players }: { players: CricketPlayerDetail[] }) {
             <div className="pt-9 px-4">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-gray-900 text-sm leading-tight group-hover:text-orange-500 transition-colors truncate">{player.name}</span>
-                <span className="text-sm leading-none shrink-0" title={player.nationality}>{player.flag}</span>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">{player.role}</Badge>
@@ -314,7 +289,26 @@ function CricketPlayers({ players }: { players: CricketPlayerDetail[] }) {
 }
 
 export default function CricketPage() {
-  const [selectedLeague, setSelectedLeague] = useState('all')
+  const [selectedLeague, setSelectedLeague] = useState('ICC T20')
+
+  // Live admin-managed data (mock stays as the fallback so the page is never blank).
+  const [remote, setRemote] = useState<Record<string, unknown> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/sports/cricket', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((res) => { if (!cancelled) setRemote(res.data ?? {}) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sliceArr = (lg: string, tab: string): any[] | null => {
+    const v = remote?.[`${lg}::${tab}`]
+    return Array.isArray(v) ? v : null
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mergeAll = (tab: string): any[] => SPORT_LEAGUE_KEYS.cricket.flatMap((lg) => sliceArr(lg, tab) ?? [])
 
   const currentLeague = useMemo(
     () => CRICKET_LEAGUES.find((l) => l.id === selectedLeague) ?? CRICKET_LEAGUES[0],
@@ -323,17 +317,47 @@ export default function CricketPage() {
 
   const standings = useMemo(() => {
     const key = selectedLeague === 'all' ? 'IPL' : selectedLeague
-    return cricketStandings[key] ?? cricketStandings['IPL']
-  }, [selectedLeague])
+    return (sliceArr(key, 'standings') ?? cricketStandings[key] ?? cricketStandings['IPL']) as CricketStanding[]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
 
-  const scores   = useMemo(() => cricketScores[selectedLeague]   ?? cricketScores['all'],   [selectedLeague])
-  const schedule = useMemo(() => cricketSchedule[selectedLeague] ?? cricketSchedule['all'], [selectedLeague])
+  const scores = useMemo(() => {
+    if (selectedLeague === 'all') {
+      const merged = remote ? mergeAll('scores') : null
+      return merged && merged.length ? merged : cricketScores['all']
+    }
+    return sliceArr(selectedLeague, 'scores') ?? cricketScores[selectedLeague] ?? cricketScores['all']
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
+
+  const schedule = useMemo(() => {
+    if (selectedLeague === 'all') {
+      const merged = remote ? mergeAll('schedule') : null
+      return merged && merged.length ? merged : cricketSchedule['all']
+    }
+    return sliceArr(selectedLeague, 'schedule') ?? cricketSchedule[selectedLeague] ?? cricketSchedule['all']
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
 
   const players = useMemo(() => {
-    if (selectedLeague === 'all') return cricketPlayerDetails
+    if (selectedLeague === 'all') {
+      const merged = remote ? mergeAll('players') : null
+      return merged && merged.length ? merged : cricketPlayerDetails
+    }
+    const fromDb = sliceArr(selectedLeague, 'players')
+    if (fromDb) return fromDb.length ? fromDb : cricketPlayerDetails
     const filtered = cricketPlayerDetails.filter((p) => p.league === selectedLeague)
     return filtered.length > 0 ? filtered : cricketPlayerDetails
-  }, [selectedLeague])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeague, remote])
+
+  const tournament = useMemo(() => {
+    const r = remote?.[`${selectedLeague}::tournament`]
+    if (Array.isArray(r) && r.length) return r as BracketRound[]
+    // Before DB loads: show ICC default for ICC T20 only
+    if (!remote && selectedLeague === 'ICC T20') return DEFAULT_CRICKET_BRACKET as BracketRound[]
+    return [] as BracketRound[]
+  }, [selectedLeague, remote])
 
   const standingsTitle = selectedLeague === 'all' ? 'IPL 2025' : `${selectedLeague} 2025`
 
@@ -349,7 +373,7 @@ export default function CricketPage() {
 
       {/* League filter pills */}
       <div className="flex flex-wrap gap-2 mb-5">
-        {CRICKET_LEAGUES.map((league) => {
+        {CRICKET_LEAGUES.filter((l) => l.id !== 'all').map((league) => {
           const active = selectedLeague === league.id
           return (
             <button
@@ -413,9 +437,10 @@ export default function CricketPage() {
               const homeWin = score.winner === 'home'
               const awayWin = score.winner === 'away'
               return (
-                <div
+                <Link
                   key={score.id}
-                  className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden hover:border-orange-200 hover:shadow-md transition-all"
+                  href={`/sports/cricket/match/${score.id}`}
+                  className="block rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden hover:border-orange-200 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-center justify-between px-4 pt-3 pb-2">
                     <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full truncate max-w-[65%]">
@@ -453,16 +478,21 @@ export default function CricketPage() {
                   </div>
 
                   {score.result && (
-                    <div className="px-4 pb-2">
+                    <div className="px-4 pb-1">
                       <p className="text-[11px] text-orange-500 font-medium truncate">{score.result}</p>
                     </div>
                   )}
 
-                  <div className="flex items-center gap-1 px-4 py-2 border-t border-gray-50 bg-gray-50/60">
-                    <MapPin className="h-3 w-3 shrink-0 text-gray-400" />
-                    <span className="text-[11px] text-gray-400 truncate">{score.venue}</span>
+                  <div className="flex items-center justify-between px-4 py-2 border-t border-gray-50 bg-gray-50/60">
+                    <span className="flex items-center gap-1 text-[11px] text-gray-400 min-w-0">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{score.venue}</span>
+                    </span>
+                    <span className="flex items-center gap-0.5 text-[11px] font-semibold text-orange-500 shrink-0 group-hover:gap-1.5 transition-all">
+                      Details <ChevronRight className="h-3.5 w-3.5" />
+                    </span>
                   </div>
-                </div>
+                </Link>
               )
             })}
           </div>
@@ -549,9 +579,10 @@ export default function CricketPage() {
             {schedule.map((match) => {
               const rel = relativeLabel(match.date)
               return (
-                <div
+                <Link
                   key={match.id}
-                  className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden hover:shadow-md hover:border-orange-200 transition-all"
+                  href={`/sports/cricket/match/${match.id}`}
+                  className="block rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden hover:shadow-md hover:border-orange-200 transition-all group"
                 >
                   <div className="flex items-center justify-between px-4 pt-3 pb-2">
                     <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full truncate max-w-[60%]">
@@ -595,7 +626,7 @@ export default function CricketPage() {
                       <span className="truncate">{match.venue}</span>
                     </span>
                   </div>
-                </div>
+                </Link>
               )
             })}
           </div>
@@ -603,14 +634,32 @@ export default function CricketPage() {
 
         {/* TOURNAMENT */}
         <TabsContent value="tournament">
-          <div className="flex items-center gap-3 mb-5">
-            <img src="/icc.png" alt="ICC T20 World Cup" className="h-9 w-9 object-contain" />
-            <div>
-              <h3 className="font-bold text-gray-900 text-lg leading-tight">ICC T20 World Cup Knockouts</h3>
-              <p className="text-gray-400 text-sm">2026 · Quarter-finals to the Final</p>
+          {tournament.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <span className="text-4xl">🏆</span>
+              <p className="text-sm font-semibold text-gray-600">
+                No tournament bracket for {selectedLeague}
+              </p>
+              <p className="text-xs text-gray-400">
+                No bracket set for {selectedLeague}. Upload it from the dashboard.
+              </p>
             </div>
-          </div>
-          <TournamentBracket rounds={T20_BRACKET} />
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-5">
+                {currentLeague.logo ? (
+                  <img src={currentLeague.logo} alt={currentLeague.name} className="h-9 w-9 object-contain" />
+                ) : (
+                  <span className="text-2xl">{currentLeague.emoji}</span>
+                )}
+                <div>
+                  <h3 className="font-bold text-gray-900 text-lg leading-tight">{currentLeague.name} Knockouts</h3>
+                  <p className="text-gray-400 text-sm">2026 · Quarter-finals to the Final</p>
+                </div>
+              </div>
+              <TournamentBracket rounds={tournament} />
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
