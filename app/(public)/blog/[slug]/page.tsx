@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { Eye, Clock, User, Tag } from 'lucide-react'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import CommentSection from '@/components/blog/CommentSection'
 import ArticleCard from '@/components/blog/ArticleCard'
@@ -17,29 +18,29 @@ const sportVariants: Record<string, 'football' | 'formula-1' | 'cricket'> = {
 
 const sportEmoji: Record<string, string> = { Football: '⚽', 'Formula-1': '🏎️', Cricket: '🏏' }
 
-type DbPost = Awaited<ReturnType<typeof prisma.post.findFirst>> & { author?: { username: string; name?: string } }
+type DbPost = Prisma.PostGetPayload<{ include: { author: { select: { username: true; name: true } } } }>
 
 function toCard(p: DbPost): Post {
-  const username = p!.author?.username ?? 'unknown'
+  const username = p.author?.username ?? 'unknown'
   return {
-    id: p!.id,
-    slug: p!.slug,
-    title: p!.title,
-    excerpt: p!.excerpt,
-    content: p!.content,
-    sport: p!.sport as Post['sport'],
-    category: p!.category,
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    excerpt: p.excerpt,
+    content: p.content,
+    sport: p.sport as Post['sport'],
+    category: p.category,
     author: username,
-    authorName: (p!.author?.name?.trim() || username),
+    authorName: (p.author?.name?.trim() || username),
     authorEmail: '',
-    publishedAt: (p!.publishedAt ?? p!.createdAt).toISOString().slice(0, 10),
-    image: p!.image,
-    views: p!.views,
-    likes: p!.likes,
-    shares: p!.shares,
-    status: p!.status as Post['status'],
-    featured: p!.featured,
-    tags: p!.tags,
+    publishedAt: (p.publishedAt ?? p.createdAt).toISOString().slice(0, 10),
+    image: p.image,
+    views: p.views,
+    likes: p.likes,
+    shares: p.shares,
+    status: p.status as Post['status'],
+    featured: p.featured,
+    tags: p.tags,
   }
 }
 
@@ -59,7 +60,7 @@ export default async function ArticlePage(props: PageProps<'/blog/[slug]'>) {
     take: 3,
     include: { author: { select: { username: true, name: true } } },
   })
-  const related = relatedRaw.map(toCard)
+  const related: Post[] = relatedRaw.map(toCard)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bookmarkModel = (prisma as any).bookmark
