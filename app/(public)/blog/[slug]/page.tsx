@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
 import { Eye, Clock, User, Tag } from 'lucide-react'
-import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import CommentSection from '@/components/blog/CommentSection'
 import ArticleCard from '@/components/blog/ArticleCard'
@@ -18,7 +17,27 @@ const sportVariants: Record<string, 'football' | 'formula-1' | 'cricket'> = {
 
 const sportEmoji: Record<string, string> = { Football: '⚽', 'Formula-1': '🏎️', Cricket: '🏏' }
 
-type DbPost = Prisma.PostGetPayload<{ include: { author: { select: { username: true; name: true } } } }>
+// Structural shape returned by the Prisma queries below (with the author
+// include). Declared inline so this file needs no Prisma type imports.
+interface DbPost {
+  id: string
+  slug: string
+  title: string
+  excerpt: string
+  content: string
+  sport: string
+  category: string
+  image: string
+  views: number
+  likes: number
+  shares: number
+  status: string
+  featured: boolean
+  tags: string[]
+  publishedAt: Date | null
+  createdAt: Date
+  author: { username: string; name: string } | null
+}
 
 function toCard(p: DbPost): Post {
   const username = p.author?.username ?? 'unknown'
