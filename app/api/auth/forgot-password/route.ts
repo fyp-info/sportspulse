@@ -14,11 +14,12 @@ export async function POST(request: Request) {
   const email = parsed.data.email.toLowerCase()
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, role: true },
+    select: { id: true, isActive: true },
   })
 
-  // Only regular user accounts use this flow; staff use the staff portal.
-  if (user && user.role === 'user') {
+  // Any active account (members AND staff/superadmin) can reset via an emailed
+  // code. We email the code to the account's own registered address.
+  if (user && user.isActive) {
     const challengeId = await issuePasswordResetCode(user.id, email)
     return NextResponse.json({ ok: true, challengeId })
   }
