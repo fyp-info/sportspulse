@@ -1,7 +1,7 @@
 'use client'
 
 import type { ElementType } from 'react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -19,6 +19,9 @@ interface NavItem {
   exact?: boolean
   emoji?: string
   children?: NavItem[]
+  // Permission key from the role-permission matrix. If the superadmin revokes
+  // this permission for a role, the item disappears from that role's sidebar.
+  perm?: string
 }
 
 const sportsChildren = (base: string): NavItem[] => [
@@ -30,27 +33,27 @@ const sportsChildren = (base: string): NavItem[] => [
 const roleNavItems: Record<string, NavItem[]> = {
   editor: [
     { href: '/dashboard/editor/profile', label: 'Profile',  icon: User },
-    { href: '/dashboard/editor/blog',    label: 'Blog',     icon: PenSquare },
-    { href: '/dashboard/editor/comments', label: 'Comments', icon: MessageSquare },
+    { href: '/dashboard/editor/blog',    label: 'Blog',     icon: PenSquare, perm: 'blog' },
+    { href: '/dashboard/editor/comments', label: 'Comments', icon: MessageSquare, perm: 'moderate_comments' },
   ],
   moderator: [
     { href: '/dashboard/moderator/profile',      label: 'Profile',       icon: User },
-    { href: '/dashboard/moderator/home-banner',  label: 'Home Banner',   icon: LayoutDashboard },
-    { href: '/dashboard/moderator/blog',         label: 'Blog',          icon: PenSquare },
-    { href: '/dashboard/moderator/sports',       label: 'Sports',        icon: Trophy, children: sportsChildren('/dashboard/moderator') },
-    { href: '/dashboard/moderator/comments',     label: 'Comments',      icon: MessageSquare },
-    { href: '/dashboard/moderator/contact',      label: 'Contact Inbox', icon: Inbox },
+    { href: '/dashboard/moderator/home-banner',  label: 'Home Banner',   icon: LayoutDashboard, perm: 'home_banner' },
+    { href: '/dashboard/moderator/blog',         label: 'Blog',          icon: PenSquare, perm: 'blog' },
+    { href: '/dashboard/moderator/sports',       label: 'Sports',        icon: Trophy, perm: 'sports', children: sportsChildren('/dashboard/moderator') },
+    { href: '/dashboard/moderator/comments',     label: 'Comments',      icon: MessageSquare, perm: 'moderate_comments' },
+    { href: '/dashboard/moderator/contact',      label: 'Contact Inbox', icon: Inbox, perm: 'contact_inbox' },
   ],
   admin: [
     { href: '/dashboard/admin/profile',         label: 'Profile',         icon: User },
-    { href: '/dashboard/admin/home-banner',     label: 'Home Banner',     icon: LayoutDashboard },
-    { href: '/dashboard/admin/blog',            label: 'Blog',            icon: PenSquare },
-    { href: '/dashboard/admin/sports',          label: 'Sports',          icon: Trophy, children: sportsChildren('/dashboard/admin') },
-    { href: '/dashboard/admin/role-management', label: 'Role Management', icon: Crown },
+    { href: '/dashboard/admin/home-banner',     label: 'Home Banner',     icon: LayoutDashboard, perm: 'home_banner' },
+    { href: '/dashboard/admin/blog',            label: 'Blog',            icon: PenSquare, perm: 'blog' },
+    { href: '/dashboard/admin/sports',          label: 'Sports',          icon: Trophy, perm: 'sports', children: sportsChildren('/dashboard/admin') },
+    { href: '/dashboard/admin/role-management', label: 'Role Management', icon: Crown, perm: 'assign_roles' },
     { href: '/dashboard/admin/registered-users', label: 'Registered Users', icon: Users },
-    { href: '/dashboard/admin/comments',        label: 'Comments',        icon: MessageSquare },
-    { href: '/dashboard/admin/contact',         label: 'Contact Inbox',   icon: Inbox },
-    { href: '/dashboard/admin/legal',           label: 'Legal Pages',     icon: FileText, children: [
+    { href: '/dashboard/admin/comments',        label: 'Comments',        icon: MessageSquare, perm: 'moderate_comments' },
+    { href: '/dashboard/admin/contact',         label: 'Contact Inbox',   icon: Inbox, perm: 'contact_inbox' },
+    { href: '/dashboard/admin/legal',           label: 'Legal Pages',     icon: FileText, perm: 'legal_pages', children: [
       { href: '/dashboard/admin/legal/privacy', label: 'Privacy Policy',    emoji: '🔒' },
       { href: '/dashboard/admin/legal/terms',   label: 'Terms of Service',  emoji: '📋' },
     ]},
@@ -133,7 +136,30 @@ export default function Sidebar() {
   const router = useRouter()
   const { user, logout } = useStaffAuth()
   const role = user?.role
-  const navItems = (role && roleNavItems[role]) ?? []
+
+  // Load the permissions the superadmin has granted to this role. The API
+  // returns only the granted rows for non-superadmins, so we hide any nav item
+  // whose `perm` isn't in the set. Superadmin always sees everything.
+  const [granted, setGranted] = useState<Set<string> | null>(null)
+  useEffect(() => {
+    if (!role || role === 'superadmin') { setGranted(null); return }
+    let cancelled = false
+    fetch('/api/role-permissions', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d: { permissions?: { permission: string }[] }) => {
+        if (!cancelled) setGranted(new Set((d.permissions ?? []).map((p) => p.permission)))
+      })
+      .catch(() => { if (!cancelled) setGranted(null) }) // fail-open: show all on error
+    return () => { cancelled = true }
+  }, [role])
+
+  const canSee = (item: NavItem) => {
+    if (!item.perm || role === 'superadmin') return true
+    if (!granted) return true // still loading → don't flicker items away
+    return granted.has(item.perm)
+  }
+
+  const navItems = ((role && roleNavItems[role]) ?? []).filter(canSee)
 
   return (
     <aside className="w-64 shrink-0 border-r border-gray-200 bg-white h-screen sticky top-0">
